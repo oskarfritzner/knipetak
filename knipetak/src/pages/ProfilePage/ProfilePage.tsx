@@ -5,21 +5,21 @@ import {
   updateUserProfile,
 } from "../../backend/firebase/services/firebase.userservice";
 import { useNavigate } from "react-router-dom";
-import { getUserBookings } from "../../backend/firebase/services/firebase.bookingservice";
+import {
+  getUserBookings,
+  cancelBooking,
+} from "../../backend/firebase/services/firebase.bookingservice";
 import { BookingData } from "../../backend/interfaces/BookingData";
 import { getTreatments } from "../../backend/firebase/services/firebase.treatmentservice";
 import { Treatment } from "../../backend/interfaces/Treatment";
 import { Gender, UserData } from "../../backend/interfaces/UserData";
 import { useAuth } from "@/context/AuthContext";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import defaultProfileIcon from "../../assets/images/defaultProfileIcon.png";
 import DataExport from "../../components/DataExport/DataExport";
 import DeleteAccount from "../../components/DeleteAccount/DeleteAccount";
 
 const Profile: React.FC = () => {
   // Use AuthContext instead of managing our own user state
   const { user, signOut: authSignOut, isLoading: authLoading } = useAuth();
-  const [profileImage, setProfileImage] = useState<string>("");
   const [, setUserData] = useState<Partial<UserData> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [bookings, setBookings] = useState<BookingData[]>([]);
@@ -36,11 +36,18 @@ const Profile: React.FC = () => {
   const [birthYearError, setBirthYearError] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [phoneError, setPhoneError] = useState<string>("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string>("");
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showDataExportModal, setShowDataExportModal] = useState(false);
+  const [showCancelBookingModal, setShowCancelBookingModal] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<BookingData | null>(
+    null
+  );
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showUpcoming, setShowUpcoming] = useState(true);
+  const [showHistory, setShowHistory] = useState(true);
+
+  // Reschedule functionality removed per request
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -59,7 +66,6 @@ const Profile: React.FC = () => {
             setBirthYear(userDataResult.birthYear || "");
             setHealthIssues(userDataResult.healthIssues || "");
             setPhoneNumber(userDataResult.phoneNumber || "");
-            setProfileImage(userDataResult.profileImage || "");
             if (userDataResult.location) {
               setAddress(userDataResult.location.address || "");
               setCity(userDataResult.location.city || "");
@@ -107,53 +113,6 @@ const Profile: React.FC = () => {
     }
   }, [showDeleteAccount, showPrivacyModal, showDataExportModal]);
 
-  const handleImageUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
-
-    // Valider filtype
-    if (!file.type.match(/image\/(jpeg|png)/)) {
-      setUploadError("Kun JPG og PNG bilder er tillatt");
-      return;
-    }
-
-    // Valider filstørrelse (maks 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Bildet er for stort. Maksimal størrelse er 5MB");
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError("");
-
-    try {
-      const storage = getStorage();
-      const storageRef = ref(
-        storage,
-        `profile_images/${user.uid}/${file.name}`
-      );
-
-      // Last opp bildet
-      await uploadBytes(storageRef, file);
-
-      // Hent nedlastingslenke
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Oppdater brukerens profilbilde i Firestore
-      await updateUserProfile(user.uid, { profileImage: downloadURL });
-
-      // Oppdater lokal state
-      setProfileImage(downloadURL);
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      setUploadError("Det oppsto en feil ved opplasting av bildet");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -185,6 +144,97 @@ const Profile: React.FC = () => {
     const treatment = treatments.find((t) => t.id === treatmentId);
     return treatment?.name || "Ukjent behandling";
   };
+
+  // Helpers to split bookings into upcoming vs history
+  const getBookingStart = (b: BookingData): Date =>
+    b.timeslot?.start instanceof Date
+      ? b.timeslot.start
+      : new Date(b.timeslot?.start);
+
+  const upcomingBookings = bookings
+    .filter((b) => b.status !== "cancelled" && getBookingStart(b) > new Date())
+    .sort(
+      (a, b) => getBookingStart(a).getTime() - getBookingStart(b).getTime()
+    );
+
+  const historyBookings = bookings
+    .filter(
+      (b) => !(b.status !== "cancelled" && getBookingStart(b) > new Date())
+    )
+    .sort(
+      (a, b) => getBookingStart(b).getTime() - getBookingStart(a).getTime()
+    );
+
+  // Helper: Determine if booking is upcoming and active
+  const isUpcomingActiveBooking = (booking: BookingData): boolean => {
+    try {
+      const now = new Date();
+      const start =
+        booking.timeslot?.start instanceof Date
+          ? booking.timeslot.start
+          : new Date(booking.timeslot?.start);
+      return booking.status !== "cancelled" && start.getTime() > now.getTime();
+    } catch {
+      return booking.status !== "cancelled";
+    }
+  };
+
+  // Reschedule helper removed
+
+  // Helper: Cancellation policy warning based on hours until start
+  const getCancellationWarning = (booking: BookingData): string => {
+    try {
+      const now = new Date();
+      const start =
+        booking.timeslot?.start instanceof Date
+          ? booking.timeslot.start
+          : new Date(booking.timeslot?.start);
+      const hours = (start.getTime() - now.getTime()) / 36e5;
+      if (hours < 24) {
+        return "Avbestilling mindre enn 24 timer før: Full pris kan belastes.";
+      }
+      if (hours < 48) {
+        return "Avbestilling 24–48 timer før: 50% av prisen kan belastes.";
+      }
+      return "";
+    } catch {
+      return "";
+    }
+  };
+
+  // Cancel flow
+  const openCancelModal = (booking: BookingData) => {
+    setBookingToCancel(booking);
+    setShowCancelBookingModal(true);
+  };
+
+  const closeCancelModal = () => {
+    setShowCancelBookingModal(false);
+    setBookingToCancel(null);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!bookingToCancel?.bookingId) return;
+    setIsCancelling(true);
+    try {
+      await cancelBooking(bookingToCancel.bookingId);
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingId === bookingToCancel.bookingId
+            ? { ...b, status: "cancelled" }
+            : b
+        )
+      );
+      closeCancelModal();
+    } catch (error) {
+      console.error("Feil ved kansellering av booking:", error);
+      alert("Det oppsto en feil ved kansellering. Vennligst prøv igjen.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Reschedule functions removed
 
   // Valideringsfunksjoner
   const validateBirthYear = (value: string) => {
@@ -300,29 +350,6 @@ const Profile: React.FC = () => {
         <div className="profile-container">
           <div className="profile-sidebar">
             <div className="profile-header">
-              <div className="profile-image-container">
-                <img
-                  src={profileImage || defaultProfileIcon}
-                  alt="Profile"
-                  className="profile-image"
-                  draggable="false"
-                />
-                <label className="image-upload-label">
-                  <input
-                    type="file"
-                    onChange={handleImageUpload}
-                    accept="image/jpeg,image/png"
-                    className="image-upload-input"
-                    disabled={isUploading}
-                  />
-                  <span className="image-upload-icon">
-                    {isUploading ? "📤" : "📷"}
-                  </span>
-                </label>
-                {uploadError && (
-                  <span className="error-message">{uploadError}</span>
-                )}
-              </div>
               <h2 className="profile-name">{user?.displayName || "Bruker"}</h2>
               <p className="profile-email">
                 {user?.email || "Ingen e-post tilgjengelig"}
@@ -515,45 +542,162 @@ const Profile: React.FC = () => {
             </div>
 
             <div className="profile-section">
-              <h3>Behandlingshistorikk</h3>
-              <div className="treatment-history">
-                {isLoading ? (
-                  <p>Laster inn behandlinger...</p>
-                ) : bookings.length > 0 ? (
-                  bookings.map((booking, index) => {
-                    console.log("Rendering booking:", booking);
-                    const treatmentName = getTreatmentName(booking.treatmentId);
-                    console.log("Treatment name:", treatmentName);
-                    return (
-                      <div key={index} className="treatment-item">
-                        <div className="treatment-info">
-                          <h4>{treatmentName}</h4>
-                          <p>
-                            {formatDate(booking.date)} (
-                            {formatTime(booking.timeslot.start)} -{" "}
-                            {formatTime(booking.timeslot.end)})
-                          </p>
-                          <p>Varighet: {booking.duration} minutter</p>
-                          <p>
-                            Sted: {booking.location.address},{" "}
-                            {booking.location.postalCode}{" "}
-                            {booking.location.city}
-                          </p>
-                          <p>Pris: {booking.price} kr</p>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p>Ingen behandlinger funnet</p>
-                )}
+              <div className="section-header">
+                <h3>Kommende timer</h3>
+                <button
+                  className="section-toggle-btn"
+                  onClick={() => setShowUpcoming((v) => !v)}
+                >
+                  {showUpcoming ? "Skjul" : "Vis"}
+                </button>
               </div>
+              {showUpcoming && (
+                <div className="treatment-history">
+                  {isLoading ? (
+                    <p>Laster inn behandlinger...</p>
+                  ) : upcomingBookings.length > 0 ? (
+                    upcomingBookings.map((booking, index) => {
+                      const treatmentName = getTreatmentName(
+                        booking.treatmentId
+                      );
+                      return (
+                        <div key={`up-${index}`} className="treatment-item">
+                          <div className="treatment-info">
+                            <h4>{treatmentName}</h4>
+                            <p>
+                              {formatDate(booking.date)} (
+                              {formatTime(booking.timeslot.start)} -{" "}
+                              {formatTime(booking.timeslot.end)})
+                            </p>
+                            <p>Varighet: {booking.duration} minutter</p>
+                            <p>
+                              Sted: {booking.location.address},{" "}
+                              {booking.location.postalCode}{" "}
+                              {booking.location.city}
+                            </p>
+                            <p>Pris: {booking.price} kr</p>
+                          </div>
+                          <div className="booking-actions">
+                            <button
+                              className="booking-action-btn danger"
+                              onClick={() => openCancelModal(booking)}
+                            >
+                              Avbestill
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p>Ingen kommende timer</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="profile-section">
+              <div className="section-header">
+                <h3>Historikk</h3>
+                <button
+                  className="section-toggle-btn"
+                  onClick={() => setShowHistory((v) => !v)}
+                >
+                  {showHistory ? "Skjul" : "Vis"}
+                </button>
+              </div>
+              {showHistory && (
+                <div className="treatment-history">
+                  {isLoading ? (
+                    <p>Laster inn behandlinger...</p>
+                  ) : historyBookings.length > 0 ? (
+                    historyBookings.map((booking, index) => {
+                      const treatmentName = getTreatmentName(
+                        booking.treatmentId
+                      );
+                      return (
+                        <div key={`hist-${index}`} className="treatment-item">
+                          <div className="treatment-info">
+                            <h4>{treatmentName}</h4>
+                            <p>
+                              {formatDate(booking.date)} (
+                              {formatTime(booking.timeslot.start)} -{" "}
+                              {formatTime(booking.timeslot.end)})
+                            </p>
+                            <p>Varighet: {booking.duration} minutter</p>
+                            <p>
+                              Sted: {booking.location.address},{" "}
+                              {booking.location.postalCode}{" "}
+                              {booking.location.city}
+                            </p>
+                            <p>Pris: {booking.price} kr</p>
+                            <p>Status: {booking.status}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p>Ingen behandlinger i historikken</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Delete Account Modal */}
+      {/* Cancel Booking Modal */}
+      {showCancelBookingModal && bookingToCancel && (
+        <div className="privacy-modal-overlay" onClick={closeCancelModal}>
+          <div
+            className="privacy-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="privacy-modal-header">
+              <h3>Bekreft avbestilling</h3>
+              <button
+                className="privacy-modal-close"
+                onClick={closeCancelModal}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="privacy-modal-body">
+              <p>
+                Er du sikker på at du vil avbestille timen{" "}
+                {formatDate(bookingToCancel.date)} kl.{" "}
+                {formatTime(bookingToCancel.timeslot.start)}?
+              </p>
+              {getCancellationWarning(bookingToCancel) && (
+                <p className="error-message">
+                  {getCancellationWarning(bookingToCancel)}
+                </p>
+              )}
+              <p>
+                Merk: Avbestillingsregler gjelder (24t - 100% / 48t - 50%
+                gebyr).
+              </p>
+              <div className="privacy-buttons">
+                <button
+                  className="privacy-action-btn secondary"
+                  onClick={handleConfirmCancel}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? "Avbestiller..." : "Bekreft avbestilling"}
+                </button>
+                <button
+                  className="privacy-action-btn tertiary"
+                  onClick={closeCancelModal}
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule modal removed */}
       {showDeleteAccount && (
         <div
           className="delete-modal-overlay"

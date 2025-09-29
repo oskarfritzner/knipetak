@@ -29,52 +29,6 @@ body {
   margin-bottom: 2.2rem;
 }
 
-.profile-image-container {
-  position: relative;
-  width: 160px;
-  height: 160px;
-  margin: 0 auto 1.3rem;
-}
-
-.profile-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #178192;
-}
-
-.image-upload-label {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: #178192;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.image-upload-label:hover {
-  transform: scale(1.1);
-}
-
-.image-upload-input {
-  display: none;
-}
-
-.image-upload-icon {
-  color: white;
-  font-size: 1.2rem;
-  height: 85%;
-  width: 100%;
-}
-
 .profile-name {
   font-size: 1.6rem;
   margin: 0.7rem 0;
@@ -129,27 +83,31 @@ body {
 }
 
 .action-button.privacy {
-  background: #2c5f2d;
+  background: #178192;
   color: white;
 }
 
 .action-button.privacy:hover {
-  background: #1e3f1f;
+  background: #146b7a;
 }
 
 .action-button.logout {
-  background: #01647c;
+  background: #178192;
   color: #ffffff;
 }
 
+.action-button.logout:hover {
+  background: #146b7a;
+}
+
 .action-button.save {
-  background: #6fb5c0;
+  background: #178192;
   color: white;
   margin-top: 1.1rem;
 }
 
 .action-button.save:hover {
-  background: #14717f;
+  background: #146b7a;
 }
 
 .action-button.save:disabled {
@@ -172,6 +130,25 @@ body {
   color: #333;
   margin-bottom: 1.6rem;
   font-size: 1.4rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-toggle-btn {
+  background: #f0f2f4;
+  color: #333;
+  border: 1px solid #e0e4e8;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.section-toggle-btn:hover {
+  background: #e7eaee;
 }
 
 .info-grid {
@@ -233,6 +210,36 @@ body {
   background: #f8f9fa;
   border-radius: 9px;
   transition: transform 0.2s;
+}
+
+.booking-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.booking-action-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #178192;
+  color: #fff;
+  cursor: pointer;
+}
+
+.booking-action-btn:hover {
+  background: #146b7a;
+}
+
+.booking-action-btn.active {
+  background: #0f5662;
+}
+
+.booking-action-btn.danger {
+  background: #dc3545;
+}
+
+.booking-action-btn.danger:hover {
+  background: #c82333;
 }
 
 .treatment-info h4 {
@@ -752,7 +759,7 @@ body {
 }
 
 .privacy-modal-header h3 {
-  color: #2c5f2d;
+  color: #178192;
   font-size: 1.25rem;
   margin: 0;
   display: flex;
@@ -774,7 +781,7 @@ body {
 
 .privacy-modal-close:hover {
   background: #f8f9fa;
-  color: #2c5f2d;
+  color: #178192;
 }
 
 .privacy-modal-body {
@@ -795,7 +802,7 @@ body {
 }
 
 .privacy-section h4 {
-  color: #2c5f2d;
+  color: #178192;
   font-size: 1.1rem;
   margin: 0 0 12px 0;
   font-weight: 600;
@@ -862,12 +869,12 @@ body {
 }
 
 .privacy-action-btn.primary {
-  background: #2c5f2d;
+  background: #178192;
   color: white;
 }
 
 .privacy-action-btn.primary:hover {
-  background: #1e3f1f;
+  background: #146b7a;
 }
 
 .privacy-action-btn.secondary {
@@ -881,8 +888,8 @@ body {
 
 .privacy-action-btn.tertiary {
   background: #f8f9fa;
-  color: #2c5f2d;
-  border: 2px solid #2c5f2d;
+  color: #178192;
+  border: 2px solid #178192;
   grid-column: 1 / -1;
 }
 
@@ -993,7 +1000,7 @@ body {
 }
 
 .data-export-modal-header h3 {
-  color: #2c5f2d;
+  color: #178192;
   font-size: 1.25rem;
   margin: 0;
   display: flex;
@@ -1015,7 +1022,7 @@ body {
 
 .data-export-modal-close:hover {
   background: #f8f9fa;
-  color: #2c5f2d;
+  color: #178192;
 }
 
 .data-export-modal-body {
@@ -1050,8 +1057,8 @@ body {
 }
 
 .data-export-modal-body .data-export__option:hover {
-  border-color: #2c5f2d;
-  background: #f0f8f0;
+  border-color: #178192;
+  background: #f0f8f8;
 }
 
 .data-export-modal-body .data-export__info {

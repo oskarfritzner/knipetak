@@ -9,9 +9,11 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc,
 } from "firebase/firestore";
 import app from "../firebase";
 import BookingData from "../../interfaces/BookingData";
+import { emailNotificationService } from "../../../services/emailNotificationService";
 
 const db = getFirestore(app);
 
@@ -42,7 +44,7 @@ export interface Booking {
  * The `createdAt` field will be automatically set to Firestore's server timestamp.
  */
 export const createBooking = async (
-  bookingData: BookingData,
+  bookingData: BookingData
 ): Promise<string> => {
   try {
     console.log("📝 Creating new booking with details:", {
@@ -68,13 +70,21 @@ export const createBooking = async (
 
     const docRef = await addDoc(
       collection(db, "bookings"),
-      bookingWithTimestamp,
+      bookingWithTimestamp
     );
     console.log("✅ Booking created successfully with ID:", docRef.id);
     console.log(
-      `📅 Booking timeslot: ${bookingData.timeslot.start.toTimeString()} - ${bookingData.timeslot.end.toTimeString()}`,
+      `📅 Booking timeslot: ${bookingData.timeslot.start.toTimeString()} - ${bookingData.timeslot.end.toTimeString()}`
     );
     console.log(`⏱️ Duration: ${bookingData.duration} minutes`);
+
+    // Send email notification to Helene (don't await to avoid blocking booking creation)
+    emailNotificationService
+      .sendNewBookingNotification(bookingData)
+      .catch((error) => {
+        console.error("Failed to send booking notification email:", error);
+      });
+
     return docRef.id;
   } catch (error) {
     console.error("Error creating booking:", error);
@@ -86,7 +96,7 @@ export const createBooking = async (
  * Fetches all bookings for a specific user from Firestore
  */
 export const getUserBookings = async (
-  userId: string,
+  userId: string
 ): Promise<BookingData[]> => {
   try {
     console.log("Fetching bookings for user:", userId);
@@ -106,6 +116,7 @@ export const getUserBookings = async (
       try {
         // Convert Firestore Timestamps to Dates
         const booking: BookingData = {
+          bookingId: doc.id,
           ...data,
           date: data.date?.toDate?.() || new Date(),
           timeslot: {
@@ -192,7 +203,7 @@ export const getAllBookings = async (): Promise<BookingData[]> => {
  */
 export const updateBooking = async (
   bookingId: string,
-  updateData: Partial<BookingData>,
+  updateData: Partial<BookingData>
 ): Promise<void> => {
   try {
     const bookingRef = doc(db, "bookings", bookingId);
@@ -209,9 +220,53 @@ export const updateBooking = async (
  */
 export const cancelBooking = async (bookingId: string): Promise<void> => {
   try {
+    // First, get the booking data before cancelling to send notification
     const bookingRef = doc(db, "bookings", bookingId);
+    const bookingDoc = await getDoc(bookingRef);
+
+    let bookingData: BookingData | null = null;
+
+    if (bookingDoc.exists()) {
+      const data = bookingDoc.data();
+
+      // Convert to BookingData format
+      bookingData = {
+        bookingId: bookingDoc.id,
+        customerId: data.customerId || "",
+        customerEmail: data.customerEmail || "",
+        customerName: data.customerName || "",
+        customerPhone: data.customerPhone || "",
+        date: data.date?.toDate?.() || new Date(),
+        duration: data.duration || 0,
+        location: data.location || { address: "", city: "", postalCode: 0 },
+        paymentStatus: data.paymentStatus || false,
+        price: data.price || 0,
+        status: "cancelled", // Will be the new status
+        customerMessage: data.customerMessage || "",
+        timeslot: {
+          start: data.timeslot?.start?.toDate?.() || new Date(),
+          end: data.timeslot?.end?.toDate?.() || new Date(),
+        },
+        treatmentId: data.treatmentId || "",
+        isGuestBooking: data.isGuestBooking || false,
+      };
+    }
+
+    // Cancel the booking
     await updateDoc(bookingRef, { status: "cancelled" });
     console.log("Booking kansellert med ID:", bookingId);
+
+    // Send cancellation notification to Helene if we have booking data
+    if (bookingData) {
+      emailNotificationService
+        .sendCancelledBookingNotification(bookingData)
+        .catch((error) => {
+          console.error(
+            "Failed to send cancellation notification email:",
+            error
+          );
+        });
+    }
   } catch (error) {
     console.error("Feil ved kansellering av booking:", error);
     throw error;

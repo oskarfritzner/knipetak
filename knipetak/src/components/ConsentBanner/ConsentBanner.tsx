@@ -57,6 +57,17 @@ const ConsentBanner: React.FC = () => {
     saveConsent(necessaryConsent);
   };
 
+  const handleRejectAll = () => {
+    const rejectConsent: ConsentData = {
+      functionalCookies: false,
+      analyticalCookies: false,
+      dataProcessing: false,
+      healthDataProcessing: false,
+      timestamp: new Date(),
+    };
+    saveConsent(rejectConsent);
+  };
+
   const handleCustomConsent = () => {
     saveConsent(consent);
   };
@@ -99,6 +110,12 @@ const ConsentBanner: React.FC = () => {
                 onClick={handleAcceptNecessary}
               >
                 Kun nødvendige
+              </button>
+              <button
+                className="consent-banner__btn consent-banner__btn--reject"
+                onClick={handleRejectAll}
+              >
+                Avvis alle
               </button>
               <button
                 className="consent-banner__btn consent-banner__btn--customize"
@@ -211,7 +228,7 @@ const ConsentBanner: React.FC = () => {
           )}
 
           <div className="consent-banner__links">
-            <a href="/privacy" className="consent-banner__link">
+            <a href="/personvern" className="consent-banner__link">
               Les personvernerklæringen
             </a>
             <span className="consent-banner__separator">•</span>

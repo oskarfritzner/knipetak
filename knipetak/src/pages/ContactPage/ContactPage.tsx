@@ -3,8 +3,7 @@ import emailjs from "@emailjs/browser";
 import "./ContactPage.css";
 import { useAuth } from "@/context/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane} from "@fortawesome/free-solid-svg-icons";
-import kontakt_oss from "../../assets/images/kontakt_oss.jpg";
+import { faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 
 function ContactPage() {
   const { user } = useAuth();
@@ -27,31 +26,69 @@ function ContactPage() {
     setSuccess("");
 
     if (id === "message") setMessage(value);
-    if (id === "email" && !user) setEmail(value); // Only update if not logged in
+    if (id === "email") setEmail(value); // Allow email updates for all users
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError("");
+    setSuccess("");
+
+    // Validation
+    if (!email.trim()) {
+      setError("E-post er påkrevd");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!message.trim()) {
+      setError("Beskjed er påkrevd");
+      setIsLoading(false);
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Ugyldig e-postadresse");
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("Attempting to send email with:", { email, message });
+    console.log("Using Service ID:", "service_sstnsjr");
+    console.log("Using Template ID:", "template_t3u03cl");
 
     try {
       const templateParams = {
-        from_email: email,
+        name: user?.displayName || email.split("@")[0],
+        email,
         message,
       };
 
-      await emailjs.send(
-        "service_b9we3th",
-        "template_lvwabq4",
+      console.log("Template params:", templateParams);
+
+      const result = await emailjs.send(
+        "service_sstnsjr", // Correct service ID confirmed
+        "template_t3u03cl", // Correct template ID (working)
         templateParams,
-        "m7Ls2T8S_jvw9YWD6",
+        "QbsqRNA19P8VBkMBZ"
       );
 
+      console.log("EmailJS result:", result);
       setSuccess("Meldingen din har blitt sendt!");
       setMessage("");
     } catch (err) {
       console.error("Failed to send message:", err);
-      setError("Kunne ikke sende meldingen. Vennligst prøv igjen.");
+      console.error("Error details:", JSON.stringify(err, null, 2));
+
+      // More specific error messages
+      if (err instanceof Error) {
+        setError(`Feil ved sending: ${err.message}`);
+      } else {
+        setError("Kunne ikke sende meldingen. Sjekk konsollen for detaljer.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -59,18 +96,8 @@ function ContactPage() {
 
   return (
     <div className="contact-container">
-      <div className="contact-hero">
-        <img 
-          src={kontakt_oss} 
-          alt="Kontakt oss" 
-          className="contact-hero__image"
-        />
-        <div className="contact-hero__overlay">
-          <h1>Kontakt Oss</h1>
-        </div>
-      </div>
-      
       <div className="contact-box">
+        <h1>Kontakt Oss</h1>
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
@@ -88,9 +115,13 @@ function ContactPage() {
               value={email}
               onChange={handleInputChange}
               className="form-input form-input--short"
-              placeholder="Skriv e-postadressen din"
+              placeholder={
+                user
+                  ? "Endre e-postadresse for svar"
+                  : "Skriv e-postadressen din"
+              }
               required
-              disabled={!!user || isLoading} // disables only if logged in or loading
+              disabled={isLoading} // Only disable during loading
             />
           </div>
 
@@ -107,11 +138,7 @@ function ContactPage() {
             />
           </div>
 
-          <button
-            type="submit"
-            className="submit-button"
-            disabled={isLoading}
-          >
+          <button type="submit" className="submit-button" disabled={isLoading}>
             {isLoading ? (
               <>
                 <span>Sending...</span>

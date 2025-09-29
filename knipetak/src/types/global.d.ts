@@ -9,6 +9,7 @@ interface Window {
     authorizeCalendar: () => Promise<boolean>;
     getAvailableCalendars: () => Promise<Calendar[]>;
   };
+  debugEmailTest: () => Promise<boolean>;
 }
 
 interface Calendar {
